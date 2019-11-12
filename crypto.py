@@ -1,6 +1,7 @@
-import random
+
 import numpy as np
 import time
+import click
 
 def etransform2( s, l, sq ):
   m = l
@@ -32,24 +33,11 @@ def irreversible( pre, s, sq, rounds ):
       ret = etransform( ret, s[ ( len( s ) - 1 ) - i ], sq )
   return ret
     
-ex1sq = np.array( [ [ 2, 1, 0, 3 ],
-                    [ 3, 0, 1, 2 ],
-                    [ 1, 2, 3, 0 ],
-                    [ 0, 3, 2, 1 ] ], dtype = np.uint8 )
-ex2 = np.array( [ 0, 1, 2, 3, 0 ], dtype = np.uint8 )
 
-# test against examples in paper
-# https://eprint.iacr.org/2005/352.pdf page 4, should see 0 0 1 0 3 and 0 3 2 0 2
-print( ex1sq )
-print( irreversible2( [], ex2, ex1sq, 1 ) )
-print()
-print( irreversible2( [], ex2, ex1sq, 2 ) )
-
-# 256square.txt must be 256 lines long with each line containing 256 elements of 0-255. It makes a latin square that defines the function used for cryptography. https://sci-hub.tw/10.1002/(SICI)1520-6610(1996)4:6%3C405::AID-JCD3%3E3.0.CO;2-J prints BURN!!! warning if not a latin square
+# 256square.txt must be 256 lines long with each line containing 256 elements of 0-255. It defines a latin square that is the function used for cryptography. https://sci-hub.tw/10.1002/(SICI)1520-6610(1996)4:6%3C405::AID-JCD3%3E3.0.CO;2-J prints warning and exits if not a latin square.
 with open( '256square.txt' ) as f:
   arr = [[int(x) for x in line.split()] for line in f]
   array = np.array( arr, dtype = np.uint8 )
-  print( array )
   for i in range( 256 ):
     row = np.zeros( shape = 256, dtype = np.uint8 )
     col = np.zeros( shape = 256, dtype = np.uint8 )
@@ -68,7 +56,10 @@ with open( '256square.txt' ) as f:
 class Crypt:
   def __init__( self, password, sq ):
     self.latinSquare = sq
+    # Strengthen all passwords
     self.password = np.fromstring( password, dtype = np.uint8 )
+    self.password = np.append( self.password, np.zeros( 32, dtype = np.uint8 ) )
+    self.password = irreversible( self.password, self.password, self.latinSquare, 3 )
   def reset( self, arr ):
     self.state = irreversible( self.password, arr, self.latinSquare, 3 )
   def nextstate( self ):
@@ -87,45 +78,108 @@ class Crypt:
         temp += pre[:256]
       pre = temp
     q = int( time.time() * 100 )
-    pre[ 0 ] += q >> 0 & 255
-    pre[ 1 ] += q >> 8 & 255 
-    pre[ 2 ] += q >> 16 & 255 
-    pre[ 3 ] += q >> 24 & 255 
-    pre[ 4 ] += q >> 32 & 255
-    pre[ 5 ] += q >> 40 & 255 
-    pre[ 6 ] += q >> 48 & 255 
-    pre[ 7 ] += q >> 56 & 255 
+    for i in range( 8 ):
+      pre[ i ] += q >> ( i * 8 ) & 255
     self.reset( pre )
-    ret = self.state.copy()
+    self.ret = self.state.copy()
     self.nextstate()
     modlength = ( len( str ) + 1 ) % 256
     str = np.append( np.array( [ modlength ], dtype = np.uint8 ), str )
-    str = np.append( str, np.zeros( 256 - modlength, dtype = np.uint8 ) )
-    while len( str ) > 0:
-      self.state += str[:256]
-      ret = np.append( ret, self.state )
-      str = str[256:]
-      self.nextstate()
-    return ret
+    self.str = np.append( str, np.zeros( 256 - modlength, dtype = np.uint8 ) )
+    return len( self.str ) // 256
+  def encryption( self ):
+    self.state += self.str[:256]
+    self.ret = np.append( self.ret, self.state )
+    self.str = self.str[256:]
+    self.nextstate()
+    return len( self.str ) // 256
   def decrypt( self, string ):
-    str = string.copy()
-    self.state = str[:256]
-    str = str[256:]
-    ret = np.empty( 0, dtype = np.uint8 )
-    while len( str ) > 0:
-      self.nextstate()
-      dec = str[:256] - self.state
-      ret = np.append( ret, dec )
-      self.state += dec
-      str = str[256:]
-    return ret[ 1 : len( ret ) - ( 256 - ret[ 0 ] ) ] 
-      
-e = Crypt( "correct Horse B@ttery 5taple", array )
+    self.str = string.copy()
+    self.state = self.str[:256]
+    self.str = self.str[256:]
+    self.ret = np.empty( 0, dtype = np.uint8 )
+    return len( self.str ) // 256
+  def decryption( self ):
+    self.nextstate()
+    dec = self.str[:256] - self.state
+    self.ret = np.append( self.ret, dec )
+    self.state += dec
+    self.str = self.str[256:]
+    if len( self.str ) == 0:
+      self.ret = self.ret[ 1 : len( self.ret ) - ( 256 - self.ret[ 0 ] ) ]
+    return len( self.str ) // 256
 
-t = time.time()
-enc = e.encrypt( 'catactus' * 10 )
-print( 'Encrypt took %d milliseconds, %s' % ( ( time.time() - t ) * 1000, enc ) )
-f = Crypt( "correct Horse B@ttery 5taple", array )
-t = time.time()
-dec = f.decrypt( enc ).tostring()
-print( 'Decrypt took %d milliseconds, %s' % ( ( time.time() - t ) * 1000, dec ) )
+@click.command()
+@click.option( '-t', '--test/--no-test', help = 'Run tests from https://eprint.iacr.org/2005/352.pdf, 00103 and 03202 should be displayed.' )
+@click.option( '-d', '--decrypt/--encrypt', help = 'Decrypt rather than encrypt. Encryption is the default.' )
+@click.option( '-pw', '--password-file', help = 'Password file.' )
+@click.option( '-i', '--input-file', help = 'Input file.' )
+@click.option( '-o', '--output-file', help = 'Output file.' )
+
+def prog( password_file, test, decrypt, input_file, output_file ):
+  """Encrypts/decrypts using latin squares."""
+  if test:
+    ex1sq = np.array( [ [ 2, 1, 0, 3 ],
+                        [ 3, 0, 1, 2 ],
+                        [ 1, 2, 3, 0 ],
+                        [ 0, 3, 2, 1 ] ], dtype = np.uint8 )
+    ex2 = np.array( [ 0, 1, 2, 3, 0 ], dtype = np.uint8 )
+
+    # test against examples in paper
+    # https://eprint.iacr.org/2005/352.pdf page 4, should see 0 0 1 0 3 and 0 3 2 0 2
+    click.echo( "Latin square: %s" % ex1sq )
+    click.echo( "Example r1: %s" % irreversible2( [], ex2, ex1sq, 1 ) )
+    click.echo()
+    click.echo( "Example r2: %s" % irreversible2( [], ex2, ex1sq, 2 ) )
+    exit()
+
+  if not input_file or not output_file:
+    print( "Input and output file are required." )
+    exit()
+    
+  if password_file:
+    try:
+      with open( password_file ) as f:
+        pw = f.read()
+    except IOError as x:
+      print( "Could not open password file." )
+      exit()
+  else:
+    pw = click.prompt( "Password", hide_input = True, confirmation_prompt = True )
+
+  try:
+    with open( input_file ) as f:
+      input = np.fromstring( f.read(), dtype = np.uint8 )
+  except IOError as x:
+    print( "Could not open input file." )
+    exit()
+
+  c = Crypt( pw, array )
+  if decrypt:
+    word = 'decrypt'
+    f1 = c.decrypt
+    f2 = c.decryption
+  else:
+    word = 'encrypt'
+    f1 = c.encrypt
+    f2 = c.encryption
+  click.echo( "Starting %sion of %s." % ( word, input_file ) ) 
+  t = time.time() * 1000.0
+  
+  r = range( f1( input ) )
+  with click.progressbar( r ) as progbar:
+    for i in progbar:
+      te = f2()
+  res = c.ret
+  try:
+    with open( output_file, "wb" ) as f:
+      f.write( res )
+      f.close()
+  except IOError as x:
+    print( "Could not open output file." )
+    exit()
+  click.echo( "Finished %sion of %s: %d milliseconds." % ( word, input_file, time.time() * 1000.0 - t ) ) 
+
+  
+if __name__ == '__main__':
+  prog()
