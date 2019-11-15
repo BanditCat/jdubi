@@ -39,7 +39,7 @@ def irreversible( pre, s, sq, rounds ):
 
 # 256square.txt must be 256 lines long with each line containing 256 elements of 0-255. It defines a latin square that is the function used for cryptography. The algorithm used to generate the latin square is https://sci-hub.tw/10.1002/(SICI)1520-6610(1996)4:6%3C405::AID-JCD3%3E3.0.CO;2-J
 # prints warning and exits if not a latin square.
-with open( '256square.txt' ) as f:
+with open( '256square.txt', 'rb' ) as f:
   arr = [[int(x) for x in line.split()] for line in f]
   array = np.array( arr, dtype = np.uint8 )
   for i in range( 256 ):
@@ -47,11 +47,11 @@ with open( '256square.txt' ) as f:
     col = np.zeros( shape = 256, dtype = np.uint8 )
     for j in range( 256 ):
       if row[ array[ i ][ j ] ] != 0:
-        print( "256square.txt was not a latin square!" )
+        print( '256square.txt was not a latin square!' )
         exit()
       row[ array[ i ][ j ] ] = 1
       if col[ array[ j ][ i ] ] != 0:
-        print( "256square.txt was not a latin square!" )
+        print( '256square.txt was not a latin square!' )
         exit()
       col[ array[ j ][ i ] ] = 1
       
@@ -126,7 +126,7 @@ class Crypt:
 @click.option( '-o', '--output-file', help = 'Output file.', default = 'enc' )
 
 def prog( password_file, test, decrypt, input_file, output_file ):
-  """Encrypts/decrypts using latin squares. If run without a command line, it will encrypt the file dec saving it as enc, or decrypt enc saving it as dec, depending on the presence of these files. If there is a file named key, it will be used as the password."""
+  '''Encrypts/decrypts using latin squares. If run without a command line, it will encrypt the file dec saving it as enc, or decrypt enc saving it as dec, depending on the presence of these files. If there is a file named key, it will be used as the password.'''
   if test:
     ex1sq = np.array( [ [ 2, 1, 0, 3 ],
                         [ 3, 0, 1, 2 ],
@@ -136,29 +136,29 @@ def prog( password_file, test, decrypt, input_file, output_file ):
 
     # test against examples in paper
     # https://eprint.iacr.org/2005/352.pdf page 4, should see 0 0 1 0 3 and 0 3 2 0 2
-    click.echo( "Latin square: %s" % ex1sq )
-    click.echo( "Example r1: %s" % irreversible2( [], ex2, ex1sq, 1 ) )
+    click.echo( 'Latin square: %s' % ex1sq )
+    click.echo( 'Example r1: %s' % irreversible2( [], ex2, ex1sq, 1 ) )
     click.echo()
-    click.echo( "Example r2: %s" % irreversible2( [], ex2, ex1sq, 2 ) )
+    click.echo( 'Example r2: %s' % irreversible2( [], ex2, ex1sq, 2 ) )
     exit()
     
   if password_file:
     try:
-      with open( password_file ) as f:
+      with open( password_file, 'rb' ) as f:
         pw = f.read()
     except IOError as x:
-      print( "Could not open password file." )
+      print( 'Could not open password file.' )
       exit()
   else:
     try:
-      with open( "key" ) as f:
+      with open( 'key', 'rb' ) as f:
         pw = f.read()
     except IOError as x:
-      pw = click.prompt( "Password", hide_input = True, confirmation_prompt = True )
+      pw = click.prompt( 'Password', hide_input = True, confirmation_prompt = True )
 
   if input_file == 'dec' and output_file == 'enc' and not decrypt:
     try:
-      with open( input_file ) as f:
+      with open( input_file, 'rb' ) as f:
         _i = f.read()
     except IOError as x:
       input_file = 'enc'
@@ -166,10 +166,10 @@ def prog( password_file, test, decrypt, input_file, output_file ):
       decrypt = True
       
   try:
-    with open( input_file ) as f:
+    with open( input_file, 'rb' ) as f:
       input = np.fromstring( f.read(), dtype = np.uint8 )
   except IOError as x:
-    print( "Could not open input file." )
+    print( 'Could not open input file.' )
     exit()
 
   c = Crypt( pw, array )
@@ -181,7 +181,7 @@ def prog( password_file, test, decrypt, input_file, output_file ):
     word = 'encrypt'
     f1 = c.encrypt
     f2 = c.encryption
-  click.echo( "Starting %sion of %s." % ( word, input_file ) ) 
+  click.echo( 'Starting %sion of %s.' % ( word, input_file ) ) 
   t = time.time() * 1000.0
   
   r = range( f1( input ) )
@@ -190,13 +190,13 @@ def prog( password_file, test, decrypt, input_file, output_file ):
       te = f2()
   res = c.ret
   try:
-    with open( output_file, "wb" ) as f:
+    with open( output_file, 'wb' ) as f:
       f.write( res )
       f.close()
   except IOError as x:
-    print( "Could not open output file." )
+    print( 'Could not open output file.' )
     exit()
-  click.echo( "Finished %sion of %s: %d milliseconds." % ( word, input_file, time.time() * 1000.0 - t ) ) 
+  click.echo( 'Finished %sion of %s: %d milliseconds.' % ( word, input_file, time.time() * 1000.0 - t ) ) 
 
   
 if __name__ == '__main__':
