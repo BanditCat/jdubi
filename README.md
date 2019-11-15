@@ -1,3 +1,4 @@
+```bash
 Usage: crypto.py [OPTIONS]
 
   Encrypts/decrypts using latin squares. If run without a command line, it
