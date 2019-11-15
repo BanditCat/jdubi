@@ -1,5 +1,8 @@
+
 import numpy as np
 import random
+
+#The algorithm used to generate the latin square is https://sci-hub.tw/10.1002/(SICI)1520-6610(1996)4:6%3C405::AID-JCD3%3E3.0.CO;2-J
 
 def gencube( n ):
   ret = np.zeros( shape = ( n, n, n ), dtype = np.int8 )

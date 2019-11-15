@@ -3,6 +3,9 @@ import numpy as np
 import time
 import click
 
+# Origin of the latin square: https://sci-hub.tw/10.1002/(SICI)1520-6610(1996)4:6%3C405::AID-JCD3%3E3.0.CO;2-J
+# Origin of the e-transform: https://eprint.iacr.org/2005/352.pdf
+
 def etransform2( s, l, sq ):
   m = l
   for i in range( len( s ) ):
@@ -11,8 +14,8 @@ def etransform2( s, l, sq ):
   return s
 
 def etransform( s, l, sq ):
-  s2 = np.append( np.array( [ l ], dtype = np.uint8 ), np.array( s[:len(s) - 1], dtype = np.uint8 ) )
-  s = (sq.flatten())[ len( sq ) * s + s2 ]
+  s2 = np.append( np.array( [ l ], dtype = np.uint8 ), np.array( s[ :len( s ) - 1 ], dtype = np.uint8 ) )
+  s = ( sq.flatten() )[ len( sq ) * s + s2 ]
   return s
 
 def irreversible2( pre, s, sq, rounds ):
@@ -34,7 +37,8 @@ def irreversible( pre, s, sq, rounds ):
   return ret
     
 
-# 256square.txt must be 256 lines long with each line containing 256 elements of 0-255. It defines a latin square that is the function used for cryptography. https://sci-hub.tw/10.1002/(SICI)1520-6610(1996)4:6%3C405::AID-JCD3%3E3.0.CO;2-J prints warning and exits if not a latin square.
+# 256square.txt must be 256 lines long with each line containing 256 elements of 0-255. It defines a latin square that is the function used for cryptography. The algorithm used to generate the latin square is https://sci-hub.tw/10.1002/(SICI)1520-6610(1996)4:6%3C405::AID-JCD3%3E3.0.CO;2-J
+# prints warning and exits if not a latin square.
 with open( '256square.txt' ) as f:
   arr = [[int(x) for x in line.split()] for line in f]
   array = np.array( arr, dtype = np.uint8 )
@@ -67,44 +71,49 @@ class Crypt:
     self.state += next
   def encrypt( self, string ):
     str = np.fromstring( string, dtype = np.uint8 )
+    # Compute the initialization vector pre
     pre = str.copy()
     if len( pre ) < 256:
       pre = np.append( pre, np.zeros( 256 - len( pre ), dtype = np.uint8 ) )
     else:
       pre = np.append( pre, np.zeros( 256 - ( len( pre ) % 256 ), dtype = np.uint8 ) )
-      temp = pre[:256]
+      temp = pre[ :256 ]
       while( len( pre ) > 256 ):
-        pre = pre[256:]
-        temp += pre[:256]
+        pre = pre[ 256: ]
+        temp += pre[ :256 ]
       pre = temp
-    q = int( time.time() * 100 )
+    t = int( time.time() * 100 )
     for i in range( 8 ):
-      pre[ i ] += q >> ( i * 8 ) & 255
+      pre[ i ] += t >> ( i * 8 ) & 255
+    # Set up self.state, self.ret and self.str
     self.reset( pre )
     self.ret = self.state.copy()
     self.nextstate()
     modlength = ( len( str ) + 1 ) % 256
     str = np.append( np.array( [ modlength ], dtype = np.uint8 ), str )
     self.str = np.append( str, np.zeros( 256 - modlength, dtype = np.uint8 ) )
+    # return how many times to call encryption
     return len( self.str ) // 256
   def encryption( self ):
-    self.state += self.str[:256]
+    self.state += self.str[ :256 ]
     self.ret = np.append( self.ret, self.state )
-    self.str = self.str[256:]
+    self.str = self.str[ 256: ]
     self.nextstate()
     return len( self.str ) // 256
   def decrypt( self, string ):
+    # Set up self.state, self.ret and self.str
     self.str = string.copy()
-    self.state = self.str[:256]
-    self.str = self.str[256:]
+    self.state = self.str[ :256 ]
+    self.str = self.str[ 256: ]
     self.ret = np.empty( 0, dtype = np.uint8 )
+    # return how many times to call decryption
     return len( self.str ) // 256
   def decryption( self ):
     self.nextstate()
-    dec = self.str[:256] - self.state
+    dec = self.str[ :256 ] - self.state
     self.ret = np.append( self.ret, dec )
     self.state += dec
-    self.str = self.str[256:]
+    self.str = self.str[ 256: ]
     if len( self.str ) == 0:
       self.ret = self.ret[ 1 : len( self.ret ) - ( 256 - self.ret[ 0 ] ) ]
     return len( self.str ) // 256
@@ -113,11 +122,11 @@ class Crypt:
 @click.option( '-t', '--test/--no-test', help = 'Run tests from https://eprint.iacr.org/2005/352.pdf, 00103 and 03202 should be displayed.' )
 @click.option( '-d', '--decrypt/--encrypt', help = 'Decrypt rather than encrypt. Encryption is the default.' )
 @click.option( '-pw', '--password-file', help = 'Password file.' )
-@click.option( '-i', '--input-file', help = 'Input file.' )
-@click.option( '-o', '--output-file', help = 'Output file.' )
+@click.option( '-i', '--input-file', help = 'Input file.', default = 'dec' )
+@click.option( '-o', '--output-file', help = 'Output file.', default = 'enc' )
 
 def prog( password_file, test, decrypt, input_file, output_file ):
-  """Encrypts/decrypts using latin squares."""
+  """Encrypts/decrypts using latin squares. If run without a command line, it will encrypt the file dec saving it as enc, or decrypt enc saving it as dec, depending on the presence of these files. If there is a file named key, it will be used as the password."""
   if test:
     ex1sq = np.array( [ [ 2, 1, 0, 3 ],
                         [ 3, 0, 1, 2 ],
@@ -132,10 +141,6 @@ def prog( password_file, test, decrypt, input_file, output_file ):
     click.echo()
     click.echo( "Example r2: %s" % irreversible2( [], ex2, ex1sq, 2 ) )
     exit()
-
-  if not input_file or not output_file:
-    print( "Input and output file are required." )
-    exit()
     
   if password_file:
     try:
@@ -145,8 +150,21 @@ def prog( password_file, test, decrypt, input_file, output_file ):
       print( "Could not open password file." )
       exit()
   else:
-    pw = click.prompt( "Password", hide_input = True, confirmation_prompt = True )
+    try:
+      with open( "key" ) as f:
+        pw = f.read()
+    except IOError as x:
+      pw = click.prompt( "Password", hide_input = True, confirmation_prompt = True )
 
+  if input_file == 'dec' and output_file == 'enc' and not decrypt:
+    try:
+      with open( input_file ) as f:
+        _i = f.read()
+    except IOError as x:
+      input_file = 'enc'
+      output_file = 'dec'
+      decrypt = True
+      
   try:
     with open( input_file ) as f:
       input = np.fromstring( f.read(), dtype = np.uint8 )
