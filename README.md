@@ -1,6 +1,5 @@
-##Usage
 ```bash
-crypto.py [OPTIONS]
+Usage: crypto.py [OPTIONS]
 
   Encrypts/decrypts using latin squares. If run without a command line, it
   will encrypt the file dec saving it as enc, or decrypt enc saving it as
